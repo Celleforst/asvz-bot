@@ -29,6 +29,8 @@ from webdriver_manager.core.http import HttpClient
 # from webdriver_manager.core.logger import log
 # from webdriver_manager.core.os_manager import ChromeType
 
+DEBUG = True
+
 TIMEFORMAT = "%H:%M"
 
 LESSON_BASE_URL = "https://schalter.asvz.ch"
@@ -88,6 +90,12 @@ FACILITIES = {
 }
 
 
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    level=logging.DEBUG if DEBUG else logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
 class EnvVariables:
     """
     Reads asvz-bot specific environment variables.
@@ -116,11 +124,6 @@ class EnvVariables:
     trainer: Optional[str] = os.environ.get("ASVZ_TRAINER")
 
 
-logging.basicConfig(
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    level=logging.INFO,
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 
 ISSUES_URL = "https://github.com/fbuetler/asvz-bot/issues"
 NO_SUCH_ELEMENT_ERR_MSG = f"Element on website not found! This may happen when the website was updated recently. Please report this incident to: {ISSUES_URL}"
@@ -161,6 +164,8 @@ class CustomHttpClient(HttpClient):
 
 class CredentialsManager:
     def __init__(self, org, uname, password, save_credentials):
+        
+        self.credential_file = Path(__file__).resolve().parent / CREDENTIALS_FILENAME
         self.credentials = self.__load()
         if self.credentials is None:
             if org is None or uname is None:
@@ -199,18 +204,18 @@ class CredentialsManager:
         return self.credentials
 
     def __store(self):
-        with open(CREDENTIALS_FILENAME, "w") as f:
+        with open(self.credential_file, "w") as f:
             json.dump(
                 self.credentials,
                 f,
             )
 
     def __load(self):
-        creds = Path(CREDENTIALS_FILENAME)
+        creds = self.credential_file
         if not creds.is_file():
             return None
 
-        with open(CREDENTIALS_FILENAME, "r") as f:
+        with open(self.credential_file, "r") as f:
             data = json.load(f)
             if (
                 CREDENTIALS_ORG not in data
@@ -313,7 +318,8 @@ class AsvzEnroller:
     # Create FirefoxOptions instance
         options = Options()
         options.add_argument("--private")  # For private browsing
-        options.add_argument("--headless")  # For headless mode
+        if not DEBUG:
+            options.add_argument("--headless")  # For headless mode
         options.add_argument("--no-sandbox")  # Required for running as root user in Docker container
         options.add_argument("--disable-dev-shm-usage")  # Required for running as root user in Docker container
         options.set_preference("intl.accept_languages", "de")
@@ -394,10 +400,16 @@ class AsvzEnroller:
             driver = AsvzEnroller.get_driver(self.chromedriver, self.proxy_url)
             driver.get(self.lesson_url)
             driver.implicitly_wait(3)
+            
+            # Check if enrollment possible
+            enrollment_prechecks = AsvzEnroller.__check_enrollment(driver)
+            enrolled = enrollment_prechecks["success"]
+
+            if not AsvzEnroller.__prechecker(enrollment_prechecks, self.lesson_start): 
+                return
 
             logging.info("Starting enrollment")
 
-            enrolled = False
             while not enrolled:
                 if self.enrollment_start < datetime.today():
                     logging.info(
@@ -431,37 +443,22 @@ class AsvzEnroller:
 
                 time.sleep(5)
                 
-                try:
-                    enrollment_el = driver.find_element(
-                        By.TAG_NAME, "app-enrollment-container"
-                    )
+                checks = AsvzEnroller.__check_enrollment(driver)
 
-                    alert_el = enrollment_el.find_element(
-                        By.XPATH, "//div[contains(@class, 'alert')]"
-                    )
-                    alert_text = alert_el.get_attribute("innerHTML")
-
-                    if "Du hast dich erfolgreich eingeschrieben" in alert_text:
-                        logging.info("Successfully enrolled. Train hard and have fun!")
-                    else:
-                        logging.warning(
-                            "Enrollment might have not been successful. Please check your E-Mail."
-                        )
-
-                    participation_el = enrollment_el.find_element(By.TAG_NAME, "span")
-                    participation_text = participation_el.get_attribute("innerHTML")
-
-                    m = LESSON_ENROLLMENT_NUMBER_REGEX.match(participation_text)
-                    if m:
-                        enrollment_number = m.group(1)
-                        logging.info(f"Your enrollment number is {enrollment_number}")
-                    else:
-                        logging.warning(
-                            "Enrollment might have not been successful. Please check your E-Mail."
-                        )
-                except NoSuchElementException as e:
+                # failed enrollment
+                if not checks["success"]:
                     logging.error("Failed to get enrollment result!")
-                    raise e
+                    raise NoSuchElementException
+                
+                logging.info("Successfully enrolled. Train hard and have fun!")
+                
+                if not checks["check"] or checks["enmbr"] == 0:
+                    logging.warning("Enrollment might have not been successful. Please check your E-Mail.")
+                
+                if checks["enmbr"] > 0: 
+                    logging.info(f"Your enrollment number is {checks['enmbr']}")
+
+
 
         except NoSuchElementException as e:
             logging.error(NO_SUCH_ELEMENT_ERR_MSG)
@@ -469,6 +466,51 @@ class AsvzEnroller:
         finally:
             if driver is not None:
                 driver.quit()
+
+
+    @staticmethod
+    def __prechecker(prechecks, lesson_time): 
+        if prechecks["success"]:
+            logging.info("You are already enrolled. Skipping enrollment.")
+            return False
+
+        if lesson_time < datetime.today(): 
+            logging.info("The currently found lesson is in the past. Skipping enrollment.")
+            return False
+                
+        return True
+
+    @staticmethod
+    def __check_enrollment(driver):
+        success = True
+        check = False
+        enrollment_number = 0
+
+        try:
+            enrollment_el = driver.find_element(
+                By.TAG_NAME, "app-enrollment-container"
+            )
+
+            alert_el = enrollment_el.find_element(
+                By.XPATH, "//div[contains(@class, 'alert')]"
+            )
+            alert_text = alert_el.get_attribute("innerHTML")
+
+            if "Du hast dich erfolgreich eingeschrieben" in alert_text:
+                check = True
+
+            participation_el = enrollment_el.find_element(By.TAG_NAME, "span")
+            participation_text = participation_el.get_attribute("innerHTML")
+
+
+            m = LESSON_ENROLLMENT_NUMBER_REGEX.match(participation_text)
+            if m:
+                enrollment_number = m.group(1)
+
+        except NoSuchElementException as e:
+            success=False
+
+        return { "success": success, "check": check, "enmbr": enrollment_number }
 
     @staticmethod
     def __get_enrollment_and_start_time(driver):
@@ -600,15 +642,17 @@ class AsvzEnroller:
 
         logging.info("Submitted login credentials")
 
-        # Wait up to 20 seconds for redirect
-        if not WebDriverWait(driver, 20).until(lambda d: d.current_url.startswith(LESSON_BASE_URL)):
+        # Wait up to 30 seconds for redirect
+        try:
+            WebDriverWait(driver, 30).until(lambda d: d.current_url.startswith(LESSON_BASE_URL))
+            logging.info("Valid login credentials")
+        except:
             logging.warning(
                 "Authentication might have failed. Current URL is '{}'".format(
                     driver.current_url
                 )
             )
-        else:
-            logging.info("Valid login credentials")
+        
 
     def __organisation_login_asvz(self, driver):
         submitbtn = WebDriverWait(driver, 20).until(
