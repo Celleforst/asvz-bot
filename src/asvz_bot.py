@@ -102,6 +102,7 @@ class EnvVariables:
     cred_username: Optional[str] = os.environ.get("ASVZ_USERNAME")
     cred_password: Optional[str] = os.environ.get("ASVZ_PASSWORD")
     save_credentials: Optional[str] = os.environ.get("ASVZ_SAVE_CREDENTIALS")
+    recurring_event: Optional[str] = os.environ.get("ASVZ_RECURRING_EVENT")
 
     # Lesson values
     lesson_id: Optional[str] = os.environ.get("ASVZ_LESSON_ID")
@@ -335,13 +336,10 @@ class AsvzEnroller:
     def wait_until(enrollment_start):
         current_time = datetime.today()
 
-        logging.info(
-            "\n\tcurrent time: {} {}\n\tenrollment time: {} {}".format(
-                current_time.date(), current_time.strftime("%H:%M:%S"), enrollment_start.date(), enrollment_start.strftime("%H:%M:%S")
+        logging.info("current time: {} {}".format(
+                current_time.date(), current_time.strftime("%H:%M:%S")
             )
         )
-
-        logging.info(enrollment_start)
 
         login_before_enrollment_seconds = 2 * 59
         slp = round((enrollment_start - current_time).total_seconds())
@@ -410,7 +408,7 @@ class AsvzEnroller:
                 logging.info("Lesson has free places")
 
                 self.__organisation_login(driver)
-
+                
                 try:
                     logging.info("Waiting for enrollment")
                     WebDriverWait(driver, 5 * 60).until(
@@ -422,7 +420,6 @@ class AsvzEnroller:
                         )
                     ).click()
 
-                    time.sleep(5)
                 except TimeoutException as e:
                     logging.info(
                         "Place was already taken in the meantime. Rechecking for available places."
@@ -432,6 +429,8 @@ class AsvzEnroller:
                 logging.info("Submitted enrollment request.")
                 enrolled = True
 
+                time.sleep(5)
+                
                 try:
                     enrollment_el = driver.find_element(
                         By.TAG_NAME, "app-enrollment-container"
@@ -521,7 +520,6 @@ class AsvzEnroller:
             )
 
         logging.info(
-            # "Enrollment starts at {}".format(enrollment_start.strftime("%H:%M:%S"))
             "Enrollment starts {}".format(enrollment_start.strftime("on %d.%m.%Y at %H:%M:%S"))
         )
         return enrollment_start
@@ -602,7 +600,7 @@ class AsvzEnroller:
 
         logging.info("Submitted login credentials")
 
-        # Wait up to 10 seconds for redirect
+        # Wait up to 20 seconds for redirect
         if not WebDriverWait(driver, 20).until(lambda d: d.current_url.startswith(LESSON_BASE_URL)):
             logging.warning(
                 "Authentication might have failed. Current URL is '{}'".format(
@@ -790,6 +788,13 @@ def main():
         help="Store your login credentials locally and reused them on the next run",
     )
 
+    parser.add_argument(
+        "--recurring",
+        default=False,
+        action="store_true",
+        help="Wait for next enrollment after enrolling instead of stopping",
+    )
+
     subparsers = parser.add_subparsers(
         dest="type", title="Enrollment type", help="Select the enrollment type"
     )
@@ -868,6 +873,9 @@ def main():
         save_credentials=EnvVariables.save_credentials
         if EnvVariables.save_credentials is not None
         else True,
+        recurring=EnvVariables.recurring_event
+        if EnvVariables.recurring_event is not None
+        else False,
         type=EnvVariables.enrollment_type
         if EnvVariables.enrollment_type != ""
         else None,
@@ -881,7 +889,7 @@ def main():
         level=EnvVariables.level if EnvVariables.level != "" else None,
         sport_id=EnvVariables.sport_id if EnvVariables.sport_id != "" else None,
     )
-
+    
     args = parser.parse_args()
     logging.debug(f"Parsed {args=}")
 
@@ -895,7 +903,7 @@ def main():
         exit(1)
 
     chromedriver_path = get_chromedriver_path(args.proxy)
-
+    
     enroller = None
     if args.type == "lesson":
         lesson_url = "{}/tn/lessons/{}".format(LESSON_BASE_URL, args.lesson_id)
@@ -918,7 +926,14 @@ def main():
     else:
         raise AsvzBotException("Unknown enrollment type: '{}".format(args.type))
 
-    enroller.enroll()
+    while True:
+        enroller.enroll()
+        if not args.recurring:
+            break
+        
+        logging.info("Wait for next enrollment (recurring event)")
+        AsvzEnroller.wait_until(enroller.lesson_start + timedelta(days=1))
+
 
 
 if __name__ == "__main__":
