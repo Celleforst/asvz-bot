@@ -17,17 +17,17 @@ from requests import Response
 from requests.adapters import HTTPAdapter
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 from webdriver_manager.core.download_manager import WDMDownloadManager
 from webdriver_manager.core.http import HttpClient
-from webdriver_manager.core.logger import log
-from webdriver_manager.core.os_manager import ChromeType
+# from webdriver_manager.core.logger import log
+# from webdriver_manager.core.os_manager import ChromeType
 
 TIMEFORMAT = "%H:%M"
 
@@ -246,7 +246,7 @@ class AsvzEnroller:
             + f"f[0]=sport:{sport_id}&"
             + f"f[1]=facility:{FACILITIES[facility]}&"
             + str_level
-            + f"date={weekday_date.year}-{weekday_date.month:02d}-{weekday_date.day:02d}%20{start_time.hour:02d}:{start_time.minute:02d}"
+            + f"date={weekday_date.year}-{weekday_date.month:02d}-{weekday_date.day:02d} {start_time.hour:02d}:{start_time.minute:02d}"
         )
         logging.info("Searching lesson on '{}'".format(sport_url))
 
@@ -308,23 +308,27 @@ class AsvzEnroller:
         return cls(chromedriver_path, lesson_url, creds)
 
     @staticmethod
-    def get_driver(chromedriver_path, proxy_url=None):
+    def get_driver(geckodriver_path=None, proxy_url=None):
+    # Create FirefoxOptions instance
         options = Options()
-        options.add_argument("--private")
-        options.add_argument("--headless")
-        options.add_argument(
-            "--no-sandbox"
-        )  # Required for running as root user in Docker container
-        options.add_argument(
-            "--disable-dev-shm-usage"
-        )  # Required for running as root user in Docker container
-        options.add_experimental_option("prefs", {"intl.accept_languages": "de"})
+        options.add_argument("--private")  # For private browsing
+        options.add_argument("--headless")  # For headless mode
+        options.add_argument("--no-sandbox")  # Required for running as root user in Docker container
+        options.add_argument("--disable-dev-shm-usage")  # Required for running as root user in Docker container
+        options.set_preference("intl.accept_languages", "de")
+    
         if proxy_url is not None:
-            options.add_argument(f"--proxy-server={proxy_url}")
+            # Set proxy if specified
+            options.set_preference("network.proxy.type", 1)
+            options.set_preference("network.proxy.http", proxy_url)
+            options.set_preference("network.proxy.http_port", 8080)  # Default port; adjust if necessary
+            options.set_preference("network.proxy.ssl", proxy_url)
+            options.set_preference("network.proxy.ssl_port", 8080)  # Default port; adjust if necessary
 
-        return webdriver.Chrome(
-            service=Service(chromedriver_path),
-            options=options,
+        # Initialize Firefox WebDriver
+        return webdriver.Firefox(
+            service=Service(geckodriver_path),
+            options=options
         )
 
     @staticmethod
@@ -332,20 +336,22 @@ class AsvzEnroller:
         current_time = datetime.today()
 
         logging.info(
-            "\n\tcurrent time: {}\n\tenrollment time: {}".format(
-                current_time.strftime("%H:%M:%S"), enrollment_start.strftime("%H:%M:%S")
+            "\n\tcurrent time: {} {}\n\tenrollment time: {} {}".format(
+                current_time.date(), current_time.strftime("%H:%M:%S"), enrollment_start.date(), enrollment_start.strftime("%H:%M:%S")
             )
         )
 
-        login_before_enrollment_seconds = 1 * 59
-        if (enrollment_start - current_time).seconds > login_before_enrollment_seconds:
-            sleep_time = (
-                enrollment_start - current_time
-            ).seconds - login_before_enrollment_seconds
+        logging.info(enrollment_start)
+
+        login_before_enrollment_seconds = 2 * 59
+        slp = round((enrollment_start - current_time).total_seconds())
+        if (slp > login_before_enrollment_seconds):
+            sleep_time = slp - login_before_enrollment_seconds
+            time_offset = timedelta(seconds=sleep_time)
             logging.info(
-                "Sleep for {} seconds until {}".format(
-                    sleep_time,
-                    (current_time + timedelta(seconds=sleep_time)).strftime("%H:%M:%S"),
+                "Sleep for {} seconds ({}) until {}".format(
+                    sleep_time, time_offset,
+                    (current_time + time_offset).strftime("%H:%M:%S")
                 )
             )
             time.sleep(sleep_time)
@@ -370,7 +376,7 @@ class AsvzEnroller:
         try:
             driver = AsvzEnroller.get_driver(self.chromedriver, self.proxy_url)
             driver.get(self.lesson_url)
-            driver.implicitly_wait(3)
+            driver.implicitly_wait(8)
             self.__organisation_login(driver)
             (
                 self.enrollment_start,
@@ -411,7 +417,7 @@ class AsvzEnroller:
                         EC.element_to_be_clickable(
                             (
                                 By.XPATH,
-                                "//button[@id='btnRegister' and (@class='btn-primary btn enrollmentPlacePadding' or @class='btn btn-default')]",
+                                "//button[@id='btnRegister' and (@class='btn-primary btn enrollmentPlacePadding' or @class='btn btn-default' or @class='btn btn-primary')]",
                             )
                         )
                     ).click()
@@ -428,7 +434,7 @@ class AsvzEnroller:
 
                 try:
                     enrollment_el = driver.find_element(
-                        By.TAG_NAME, "app-lessons-enrollment-button"
+                        By.TAG_NAME, "app-enrollment-container"
                     )
 
                     alert_el = enrollment_el.find_element(
@@ -515,7 +521,8 @@ class AsvzEnroller:
             )
 
         logging.info(
-            "Enrollment starts at {}".format(enrollment_start.strftime("%H:%M:%S"))
+            # "Enrollment starts at {}".format(enrollment_start.strftime("%H:%M:%S"))
+            "Enrollment starts {}".format(enrollment_start.strftime("on %d.%m.%Y at %H:%M:%S"))
         )
         return enrollment_start
 
@@ -547,7 +554,8 @@ class AsvzEnroller:
                 "Failed to parse lesson start time: '{}'".format(lesson_start_raw)
             )
 
-        logging.info("Lesson starts at {}".format(lesson_start.strftime("%H:%M:%S")))
+        # logging.info("Lesson starts at {}".format(lesson_start.strftime("%H:%M:%S")))
+        logging.info("Lesson starts {}".format(lesson_start.strftime("on %d.%m.%Y at %H:%M:%S")))
         return lesson_start
 
     def __organisation_login(self, driver):
@@ -570,9 +578,10 @@ class AsvzEnroller:
                     (
                         By.XPATH,
                         "//button[@class='btn btn-warning btn-block' and @title='SwitchAai Account Login']",
-                    )
+                     )
                 )
             ).click()
+
 
             organization = driver.find_element(
                 By.XPATH, "//input[@id='userIdPSelection_iddtext']"
@@ -582,6 +591,7 @@ class AsvzEnroller:
             organization.send_keys(Keys.ENTER)
 
             # UZH switched to Switch edu-ID login @see https://github.com/fbuetler/asvz-bot/issues/31
+            
             if (
                 self.creds[CREDENTIALS_ORG] == SWITCH_EDUID_ORGANISATION_NAME
                 or self.creds[CREDENTIALS_ORG] == UZH_ORGANISATION_NAME
@@ -591,9 +601,9 @@ class AsvzEnroller:
                 self.__organisation_login_default(driver)
 
         logging.info("Submitted login credentials")
-        time.sleep(3)  # wait until redirect is completed
 
-        if not driver.current_url.startswith(LESSON_BASE_URL):
+        # Wait up to 10 seconds for redirect
+        if not WebDriverWait(driver, 20).until(lambda d: d.current_url.startswith(LESSON_BASE_URL)):
             logging.warning(
                 "Authentication might have failed. Current URL is '{}'".format(
                     driver.current_url
@@ -603,6 +613,15 @@ class AsvzEnroller:
             logging.info("Valid login credentials")
 
     def __organisation_login_asvz(self, driver):
+        submitbtn = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//button[@type='submit' and text()='Login']",
+                )
+            )
+        )
+
         driver.find_element(By.XPATH, "//input[@id='AsvzId']").send_keys(
             self.creds[CREDENTIALS_UNAME]
         )
@@ -610,14 +629,7 @@ class AsvzEnroller:
             self.creds[CREDENTIALS_PW]
         )
 
-        WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//button[@type='submit' and text()='Login']",
-                )
-            )
-        ).click()
+        submitbtn.click()
 
     def __organisation_login_switch_eduid(self, driver):
         driver.find_element(By.XPATH, "//input[@id='username']").send_keys(
@@ -653,13 +665,23 @@ class AsvzEnroller:
         ).click()
 
     def __organisation_login_default(self, driver):
+        submitbtn = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//button[@type='submit']",
+                )
+            )
+        )
+
         driver.find_element(By.XPATH, "//input[@id='username']").send_keys(
             self.creds[CREDENTIALS_UNAME]
         )
         driver.find_element(By.XPATH, "//input[@id='password']").send_keys(
             self.creds[CREDENTIALS_PW]
         )
-        driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        
+        submitbtn.click()
 
     def __wait_for_free_places(self, driver):
         while True:
@@ -703,25 +725,32 @@ def get_chromedriver_path(proxy_url=None):
 
     webdriver_manager = None
     try:
-        if proxy_url is not None:
-            webdriver_manager = ChromeDriverManager(
-                chrome_type=ChromeType.CHROMIUM, download_manager=download_manager
-            )
-        else:
-            webdriver_manager = ChromeDriverManager(chrome_type=ChromeType.CHROMIUM)
-    except:
-        webdriver_manager = None
-
-    if webdriver_manager is None:
-        try:
-            if proxy_url is not None:
-                webdriver_manager = ChromeDriverManager(
-                    chrome_type=ChromeType.GOOGLE, download_manager=download_manager
-                )
-            else:
-                webdriver_manager = ChromeDriverManager(chrome_type=ChromeType.GOOGLE)
-        except:
-            webdriver_manager = None
+        webdriver_manager = GeckoDriverManager()
+        driver_path = webdriver_manager.install()
+        return driver_path
+    except Exception as e:
+        logging.error(f"Failed to get GeckoDriverManager: {e}")
+    # except:
+    #     webdriver_manager = None
+    #     if proxy_url is not None:
+    #         webdriver_manager = ChromeDriverManager(
+    #             chrome_type=ChromeType.CHROMIUM, download_manager=download_manager
+    #         )
+    #     else:
+    #         webdriver_manager = ChromeDriverManager(chrome_type=ChromeType.CHROMIUM)
+    # except:
+    #     webdriver_manager = None
+    #
+    # if webdriver_manager is None:
+    #     try:
+    #         if proxy_url is not None:
+    #             webdriver_manager = ChromeDriverManager(
+    #                 chrome_type=ChromeType.GOOGLE, download_manager=download_manager
+    #             )
+    #         else:
+    #             webdriver_manager = ChromeDriverManager(chrome_type=ChromeType.GOOGLE)
+        # except:
+        #     webdriver_manager = None
 
     if webdriver_manager is None:
         logging.error("Failed to find chrome/chromium")
