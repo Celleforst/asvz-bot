@@ -1,0 +1,10 @@
+# Use this file as a basis and rename it to docker-compose.yaml
+services:
+  example-sport:                        # You can change service name
+    container_name: asvz-bot-example    # You can change container name
+    image: asvz-bot
+    build:
+      context: .                        
+    env_file:
+      - env-files/example-login.env     # File containing login details
+      - env-files/example-sport.env     # File containing sport info 
