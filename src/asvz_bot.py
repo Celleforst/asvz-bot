@@ -26,8 +26,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.firefox import GeckoDriverManager
 from webdriver_manager.core.download_manager import WDMDownloadManager
 from webdriver_manager.core.http import HttpClient
-# from webdriver_manager.core.logger import log
-# from webdriver_manager.core.os_manager import ChromeType
+
 
 DEBUG = False
 
@@ -397,7 +396,7 @@ class AsvzEnroller:
             AsvzEnroller.wait_until(self.enrollment_start)
 
         # Check if lesson in the past
-        if lesson_time < datetime.today(): 
+        if self.lesson_start < datetime.today(): 
             logging.info("The selected lesson is in the past. Skipping enrollment.")
             return
 
