@@ -31,8 +31,8 @@ src/bot-env
 # Config files
 *.env
 *-env
-*-docker-compose.yaml
-docker-compose-*.yaml
+!env-files/example-*.env
+docker-compose*
 !docker-compose.yaml.example
 
 # Pytest
