@@ -1,3 +1,9 @@
+## Changes in this fork
+* Added a few usability features (support for recurrent lessons, enrollment pre-checks, more logging)
+* Use Firefox bot instead of Chrome/Chromium
+
+(Only tested for ETHZ login)
+
 ## :warning: **asvz bot is no longer maintained**
 
 This repository has been archived on Dec 18th, 2023.
@@ -33,7 +39,7 @@ This repo contains a script to automatically enroll to ASVZ lessons
 You need to install the following:
 
 - [Python 3](https://www.python.org/downloads/)
-- [Chrome](https://support.google.com/chrome/answer/95346) or [Chromium](https://www.chromium.org/getting-involved/download-chromium)
+- [Firefox](https://www.firefox.com/en-US/browsers/desktop/)
 
 ### First time
 
