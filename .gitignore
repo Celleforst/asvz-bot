@@ -1,6 +1,7 @@
 # Virtual env
 .venv
 venv
+src/bot-env
 
 # Ansible-Vault
 .secret
@@ -32,9 +33,9 @@ venv
 *-env
 *-docker-compose.yaml
 docker-compose-*.yaml
+!docker-compose.yaml.example
 
 # Pytest
 .pytest_cache
 __pycache__
 
-env-files
