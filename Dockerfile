@@ -11,8 +11,6 @@ COPY src/requirements.txt .
 RUN python3 -m pip install -r requirements.txt
 
 COPY src .
-COPY enroll.sh .
-COPY start-command.sh .
 
 CMD ["bash", "-c", "python3 asvz_bot.py"]
 
