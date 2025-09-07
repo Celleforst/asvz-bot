@@ -29,7 +29,7 @@ from webdriver_manager.core.http import HttpClient
 # from webdriver_manager.core.logger import log
 # from webdriver_manager.core.os_manager import ChromeType
 
-DEBUG = True
+DEBUG = False
 
 TIMEFORMAT = "%H:%M"
 
@@ -128,7 +128,7 @@ class EnvVariables:
 ISSUES_URL = "https://github.com/fbuetler/asvz-bot/issues"
 NO_SUCH_ELEMENT_ERR_MSG = f"Element on website not found! This may happen when the website was updated recently. Please report this incident to: {ISSUES_URL}"
 
-LESSON_ENROLLMENT_NUMBER_REGEX = re.compile(r".*Du\shast\sdie\sPlatz\-Nr\.\s(\d+).*")
+LESSON_ENROLLMENT_NUMBER_REGEX = re.compile(r".*Platz\-Nr\.\s(\d+).*")
 
 
 class AsvzBotException(Exception):
@@ -396,18 +396,18 @@ class AsvzEnroller:
         if datetime.today() < self.enrollment_start:
             AsvzEnroller.wait_until(self.enrollment_start)
 
+        # Check if lesson in the past
+        if lesson_time < datetime.today(): 
+            logging.info("The selected lesson is in the past. Skipping enrollment.")
+            return
+
+        enrolled = False
+        
         try:
             driver = AsvzEnroller.get_driver(self.chromedriver, self.proxy_url)
             driver.get(self.lesson_url)
             driver.implicitly_wait(3)
             
-            # Check if enrollment possible
-            enrollment_prechecks = AsvzEnroller.__check_enrollment(driver)
-            enrolled = enrollment_prechecks["success"]
-
-            if not AsvzEnroller.__prechecker(enrollment_prechecks, self.lesson_start): 
-                return
-
             logging.info("Starting enrollment")
 
             while not enrolled:
@@ -421,6 +421,15 @@ class AsvzEnroller:
 
                 self.__organisation_login(driver)
                 
+                # Check if already enrolled
+                enrollment_prechecks = AsvzEnroller.__check_enrollment(driver)
+                enrolled = enrollment_prechecks["success"]
+
+                if enrolled:
+                    logging.info("You are already enrolled. Skipping enrollment.")
+                    return
+
+
                 try:
                     logging.info("Waiting for enrollment")
                     WebDriverWait(driver, 5 * 60).until(
@@ -452,12 +461,10 @@ class AsvzEnroller:
                 
                 logging.info("Successfully enrolled. Train hard and have fun!")
                 
-                if not checks["check"] or checks["enmbr"] == 0:
-                    logging.warning("Enrollment might have not been successful. Please check your E-Mail.")
-                
                 if checks["enmbr"] > 0: 
                     logging.info(f"Your enrollment number is {checks['enmbr']}")
-
+                else:
+                    logging.warning("Enrollment might have not been successful. Please check your E-Mail.")
 
 
         except NoSuchElementException as e:
@@ -469,48 +476,28 @@ class AsvzEnroller:
 
 
     @staticmethod
-    def __prechecker(prechecks, lesson_time): 
-        if prechecks["success"]:
-            logging.info("You are already enrolled. Skipping enrollment.")
-            return False
-
-        if lesson_time < datetime.today(): 
-            logging.info("The currently found lesson is in the past. Skipping enrollment.")
-            return False
-                
-        return True
-
-    @staticmethod
     def __check_enrollment(driver):
-        success = True
-        check = False
+        success = False
         enrollment_number = 0
 
         try:
-            enrollment_el = driver.find_element(
+            enrollment_container = driver.find_element(
                 By.TAG_NAME, "app-enrollment-container"
             )
 
-            alert_el = enrollment_el.find_element(
-                By.XPATH, "//div[contains(@class, 'alert')]"
-            )
-            alert_text = alert_el.get_attribute("innerHTML")
-
-            if "Du hast dich erfolgreich eingeschrieben" in alert_text:
-                check = True
-
-            participation_el = enrollment_el.find_element(By.TAG_NAME, "span")
-            participation_text = participation_el.get_attribute("innerHTML")
-
-
-            m = LESSON_ENROLLMENT_NUMBER_REGEX.match(participation_text)
-            if m:
-                enrollment_number = m.group(1)
-
+            enrollment_els = enrollment_container.find_elements(By.TAG_NAME, "span")
+            
+            for el in enrollment_els:
+                text = el.get_attribute("innerHTML")
+                if "Eingeschrieben" in text:
+                    success = True
+                if "Platz" in text:
+                    enrollment_number = LESSON_ENROLLMENT_NUMBER_REGEX.match(text).group(1)
+            
         except NoSuchElementException as e:
             success=False
 
-        return { "success": success, "check": check, "enmbr": enrollment_number }
+        return { "success": success, "enmbr": int(enrollment_number) }
 
     @staticmethod
     def __get_enrollment_and_start_time(driver):
