@@ -107,3 +107,6 @@ flag as follows:
     ```bash
     docker compose --env-file myEvent.env up --build
     ```
+
+## Make commands
+You can also use make commands. Get an overview of the commands with `make help`
