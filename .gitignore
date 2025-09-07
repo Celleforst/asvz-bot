@@ -16,6 +16,9 @@ src/bot-env
 # vim intermediary files
 *.swp
 
+# scripts
+*.sh
+
 # Editor configuration
 .idea
 .vscode
@@ -31,8 +34,10 @@ src/bot-env
 # Config files
 *.env
 *-env
+*.yaml
+*.json
+
 !env-files/example-*.env
-docker-compose*
 !docker-compose.yaml.example
 
 # Pytest
