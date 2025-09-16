@@ -28,8 +28,6 @@ from webdriver_manager.core.download_manager import WDMDownloadManager
 from webdriver_manager.core.http import HttpClient
 
 
-DEBUG = False   # Activate POST and GET messages as well as browser visualization (only works if screen output available)
-
 TIMEFORMAT = "%H:%M"
 
 LESSON_BASE_URL = "https://schalter.asvz.ch"
@@ -88,6 +86,7 @@ FACILITIES = {
     "Bad Bungertwies": 45602,
 }
 
+DEBUG = os.getenv('ASVZ_DEBUG') == "true"
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
