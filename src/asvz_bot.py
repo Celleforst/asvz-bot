@@ -384,7 +384,8 @@ class AsvzEnroller:
             (
                 self.enrollment_start,
                 self.lesson_start,
-            ) = AsvzEnroller.__get_enrollment_and_start_time(driver)
+            ) = AsvzEnroller.__get_enrollment_and_start_time(driver) 
+            enrolled = AsvzEnroller.__check_enrollment(driver)["success"]
         except NoSuchElementException as e:
             logging.error(NO_SUCH_ELEMENT_ERR_MSG)
             raise e
@@ -400,13 +401,15 @@ class AsvzEnroller:
             logging.info("The selected lesson is in the past. Skipping enrollment.")
             return
 
-        enrolled = False
-        
         try:
             driver = AsvzEnroller.get_driver(self.chromedriver, self.proxy_url)
             driver.get(self.lesson_url)
             driver.implicitly_wait(3)
             
+            if enrolled:
+                logging.info("You are already enrolled. Skipping enrollment.")
+                return
+
             logging.info("Starting enrollment")
 
             while not enrolled:
@@ -420,14 +423,6 @@ class AsvzEnroller:
 
                 self.__organisation_login(driver)
                 
-                # Check if already enrolled
-                enrollment_prechecks = AsvzEnroller.__check_enrollment(driver)
-                enrolled = enrollment_prechecks["success"]
-
-                if enrolled:
-                    logging.info("You are already enrolled. Skipping enrollment.")
-                    return
-
 
                 try:
                     logging.info("Waiting for enrollment")
@@ -580,7 +575,6 @@ class AsvzEnroller:
                 "Failed to parse lesson start time: '{}'".format(lesson_start_raw)
             )
 
-        # logging.info("Lesson starts at {}".format(lesson_start.strftime("%H:%M:%S")))
         logging.info("Lesson starts {}".format(lesson_start.strftime("on %d.%m.%Y at %H:%M:%S")))
         return lesson_start
 
@@ -758,30 +752,9 @@ def get_chromedriver_path(proxy_url=None):
         return driver_path
     except Exception as e:
         logging.error(f"Failed to get GeckoDriverManager: {e}")
-    # except:
-    #     webdriver_manager = None
-    #     if proxy_url is not None:
-    #         webdriver_manager = ChromeDriverManager(
-    #             chrome_type=ChromeType.CHROMIUM, download_manager=download_manager
-    #         )
-    #     else:
-    #         webdriver_manager = ChromeDriverManager(chrome_type=ChromeType.CHROMIUM)
-    # except:
-    #     webdriver_manager = None
-    #
-    # if webdriver_manager is None:
-    #     try:
-    #         if proxy_url is not None:
-    #             webdriver_manager = ChromeDriverManager(
-    #                 chrome_type=ChromeType.GOOGLE, download_manager=download_manager
-    #             )
-    #         else:
-    #             webdriver_manager = ChromeDriverManager(chrome_type=ChromeType.GOOGLE)
-        # except:
-        #     webdriver_manager = None
 
     if webdriver_manager is None:
-        logging.error("Failed to find chrome/chromium")
+        logging.error("Failed to find firefox")
         exit(1)
 
     return webdriver_manager.install()
