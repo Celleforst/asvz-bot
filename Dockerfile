@@ -1,4 +1,4 @@
-FROM continuumio/miniconda3:latest
+FROM python:3.12-trixie
 
 # Set Zurich timezone
 ENV TZ="Europe/Zurich"
