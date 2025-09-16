@@ -28,7 +28,7 @@ from webdriver_manager.core.download_manager import WDMDownloadManager
 from webdriver_manager.core.http import HttpClient
 
 
-DEBUG = False
+DEBUG = False   # Activate POST and GET messages as well as browser visualization (only works if screen output available)
 
 TIMEFORMAT = "%H:%M"
 
