@@ -229,7 +229,7 @@ class AsvzEnroller:
     @classmethod
     def from_lesson_attributes(
         cls,
-        chromedriver_path,
+        geckodriver_path,
         weekday,
         start_time,
         trainer,
@@ -258,7 +258,7 @@ class AsvzEnroller:
         lesson_url = None
         driver = None
         try:
-            driver = AsvzEnroller.get_driver(chromedriver_path, proxy_url)
+            driver = AsvzEnroller.get_driver(geckodriver_path, proxy_url)
             driver.get(sport_url)
             driver.implicitly_wait(3)
 
@@ -310,7 +310,7 @@ class AsvzEnroller:
             if driver is not None:
                 driver.quit()
 
-        return cls(chromedriver_path, lesson_url, creds)
+        return cls(geckodriver_path, lesson_url, creds)
 
     @staticmethod
     def get_driver(geckodriver_path=None, proxy_url=None):
@@ -359,8 +359,8 @@ class AsvzEnroller:
             )
             time.sleep(sleep_time)
 
-    def __init__(self, chromedriver, lesson_url, creds, proxy_url=None):
-        self.chromedriver = chromedriver
+    def __init__(self, geckodriver, lesson_url, creds, proxy_url=None):
+        self.geckodriver = geckodriver
         self.lesson_url = lesson_url
         self.creds = creds
         self.proxy_url = proxy_url
@@ -377,7 +377,7 @@ class AsvzEnroller:
     def enroll(self):
         logging.info("Checking login credentials")
         try:
-            driver = AsvzEnroller.get_driver(self.chromedriver, self.proxy_url)
+            driver = AsvzEnroller.get_driver(self.geckodriver, self.proxy_url)
             driver.get(self.lesson_url)
             driver.implicitly_wait(8)
             self.__organisation_login(driver)
@@ -402,7 +402,7 @@ class AsvzEnroller:
             return
 
         try:
-            driver = AsvzEnroller.get_driver(self.chromedriver, self.proxy_url)
+            driver = AsvzEnroller.get_driver(self.geckodriver, self.proxy_url)
             driver.get(self.lesson_url)
             driver.implicitly_wait(3)
             
@@ -739,7 +739,7 @@ def parse_and_validate_start_time(start_time) -> datetime:
         raise argparse.ArgumentTypeError(msg)
 
 
-def get_chromedriver_path(proxy_url=None):
+def get_geckodriver_path(proxy_url=None):
     if proxy_url is not None:
         logging.info(f"Using proxy: {proxy_url}")
         http_client = CustomHttpClient(proxy=proxy_url)
@@ -905,18 +905,18 @@ def main():
         logging.error(e)
         exit(1)
 
-    chromedriver_path = get_chromedriver_path(args.proxy)
+    geckodriver_path = get_geckodriver_path(args.proxy)
     
     enroller = None
     if args.type == "lesson":
         lesson_url = "{}/tn/lessons/{}".format(LESSON_BASE_URL, args.lesson_id)
-        enroller = AsvzEnroller(chromedriver_path, lesson_url, creds, args.proxy)
+        enroller = AsvzEnroller(geckodriver_path, lesson_url, creds, args.proxy)
     elif args.type == "event":
         lesson_url = "{}/tn/events/{}".format(LESSON_BASE_URL, args.event_id)
-        enroller = AsvzEnroller(chromedriver_path, lesson_url, creds, args.proxy)
+        enroller = AsvzEnroller(geckodriver_path, lesson_url, creds, args.proxy)
     elif args.type == "training":
         enroller = AsvzEnroller.from_lesson_attributes(
-            chromedriver_path,
+            geckodriver_path,
             args.weekday,
             args.start_time,
             args.trainer,
