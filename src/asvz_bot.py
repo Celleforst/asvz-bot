@@ -384,6 +384,8 @@ class AsvzEnroller:
                 self.enrollment_start,
                 self.lesson_start,
             ) = AsvzEnroller.__get_enrollment_and_start_time(driver) 
+
+
             enrolled = AsvzEnroller.__check_enrollment(driver)["success"]
         except NoSuchElementException as e:
             logging.error(NO_SUCH_ELEMENT_ERR_MSG)
@@ -620,10 +622,14 @@ class AsvzEnroller:
                 self.__organisation_login_default(driver)
 
         logging.info("Submitted login credentials")
+        
 
         # Wait up to 30 seconds for redirect
         try:
-            WebDriverWait(driver, 30).until(lambda d: d.current_url.startswith(LESSON_BASE_URL))
+            #WebDriverWait(driver, 30).until(lambda d: d.current_url.startswith(LESSON_BASE_URL))
+
+            # Hacky solution to update that sends us to memberships page after login
+            WebDriverWait(driver, 30, poll_frequency=1).until(lambda d: "memberships" in d.current_url)
             logging.info("Valid login credentials")
         except:
             logging.warning(
@@ -631,6 +637,12 @@ class AsvzEnroller:
                     driver.current_url
                 )
             )
+
+        # Make sure we go back to lesson url since currently on memberships page
+        driver.get(self.lesson_url)
+
+
+
         
 
     def __organisation_login_asvz(self, driver):
