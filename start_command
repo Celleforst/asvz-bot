@@ -1,0 +1,10 @@
+#!/bin/bash
+if [ "$ASVZ_DEBUG" = "true" ]; then
+    rm -f /tmp/.X99-lock
+    Xvfb :99 -screen 0 1280x1024x24 &
+    until [ -e /tmp/.X11-unix/X99 ]; do sleep 0.1; done
+    x11vnc -display :99 -forever -nopw -quiet &
+    DISPLAY=:99 python3 asvz_bot.py
+else
+    python3 asvz_bot.py
+fi

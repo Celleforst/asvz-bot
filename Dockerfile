@@ -16,9 +16,9 @@ COPY src/requirements.txt .
 RUN python3 -m pip install -r requirements.txt
 
 COPY src .
-COPY start.sh .
-RUN chmod +x start.sh
+COPY start_command .
+RUN chmod +x start_command
 
-CMD ["bash", "start.sh"]
+CMD ["bash", "start_command"]
 
 # CMD ["tail", "-f", "/dev/null"]
