@@ -79,11 +79,15 @@ FACILITIES = {
     "Sport Center Irchel": 45577,
     "Sport Center Polyterrasse": 45594,
     "Sport Center Winterthur": 45610,
+    "Sport Gloriarank": 490960,
     "Toni-Areal": 45568,
     "Wädenswil Kraft-/Cardio-Center": 45613,
     "Bad City": 45604,
     "Bad Oerlikon": 45590,
     "Bad Bungertwies": 45602,
+    "Bad Bläsi": 329727,
+    "Bad Riedtli": 97520,
+    "Badi Wollishofen": 45607,
 }
 
 DEBUG = os.getenv('ASVZ_DEBUG') == "true"
