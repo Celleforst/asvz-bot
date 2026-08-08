@@ -2,9 +2,12 @@
 services:
   example-sport:                        # You can change service name
     container_name: asvz-bot-example    # You can change container name
-    image: asvz-bot
-    build:
-      context: .                        
+    # Pull pre-built image from GHCR (recommended):
+    image: ghcr.io/celleforst/asvz-bot:latest
+    # Or build locally instead (remove the image line above and uncomment below):
+    # image: asvz-bot
+    # build:
+    #   context: .
     env_file:
       - env-files/example-login.env     # File containing login details
-      - env-files/example-sport.env     # File containing sport info 
+      - env-files/example-sport.env     # File containing sport info
