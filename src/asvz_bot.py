@@ -643,6 +643,10 @@ class AsvzEnroller:
                 )
             )
 
+        if "login.eduid.ch" in driver.current_url:
+            logging.error("Authentication failed: still on eduID login page. Check your credentials.")
+            exit(1)
+
         # Make sure we go back to lesson url since currently on memberships page
         driver.get(self.lesson_url)
 
