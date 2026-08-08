@@ -1,8 +1,7 @@
 ## Changes in this fork
 * Added a few usability features (support for recurrent lessons, enrollment pre-checks, more logging)
 * Use Firefox bot instead of Chrome/Chromium
-
-(Only tested for ETHZ login)
+* Login via SWITCH edu-ID or ASVZ ID
 
 ## :warning: **asvz bot is no longer maintained**
 
@@ -21,16 +20,15 @@ This repo contains a script to automatically enroll to ASVZ lessons
     - based on sport ID, day, time, trainer, level, facility (for lessons visited periodically)
 - Enroll to lesson that is already full
 - Login as a member of
-    - ETH
-    - UZH
     - ZHAW
     - PHZH
     - ASVZ
+    - SWITCH edu-ID (EDUID)
 - Save your credentials locally and reuse them on the next run
 - Note:
-  UZH, ZHAW and PHZH use SWITCH edu-ID as login (*email* + password).
-  ETH uses own login (*nethz* + password)
-  ASVZ uses own login (*ASVZ-ID* + password)
+  ZHAW and PHZH use SWITCH edu-ID as login (*email* + password).
+  ASVZ uses own login (*ASVZ-ID* + password).
+  EDUID uses SWITCH edu-ID login (*email* + password).
 
 ## Run
 
@@ -65,7 +63,7 @@ python3 asvz_bot.py -h
 Enroll by lesson ID and save credentials (locally in `.asvz-bot.json`)
 
 ```bash
-python3 asvz_bot.py --organisation "ETH" --username "flbuetle" --save-credentials lesson 196346
+python3 asvz_bot.py --organisation "EDUID" --username "alex.taylor@example.org" --save-credentials lesson 196346
 ```
 
 Enroll by lesson ID and use saved credentials

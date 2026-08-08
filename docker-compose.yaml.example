@@ -11,3 +11,6 @@ services:
     env_file:
       - env-files/example-login.env     # File containing login details
       - env-files/example-sport.env     # File containing sport info
+    # Uncomment to enable VNC access when ASVZ_DEBUG=true (connect via any VNC client)
+    # ports:
+    #   - "5900:5900"

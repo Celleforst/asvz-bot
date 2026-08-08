@@ -2,6 +2,7 @@
 # coding=UTF-8
 
 import argparse
+import shutil
 import getpass
 import json
 import logging
@@ -39,17 +40,12 @@ CREDENTIALS_ORG = "organisation"
 CREDENTIALS_UNAME = "username"
 CREDENTIALS_PW = "password"
 
-ETH_ORGANISATION_NAME = "ETH Zürich"
-UZH_ORGANISATION_NAME = "Universität Zürich"
 ZHAW_ORGANISATION_NAME = "ZHAW - Zürcher Hochschule für Angewandte Wissenschaften"
 PHZH_ORGANISATION_NAME = "PH Zürich - Pädagogische Hochschule Zürich"
 ASVZ_ORGANISATION_NAME = "ASVZ"
 SWITCH_EDUID_ORGANISATION_NAME = "SWITCH edu-ID"
 
-# organisation name as displayed by SwitchAAI
 ORGANISATIONS = {
-    "ETH": ETH_ORGANISATION_NAME,
-    "UZH": UZH_ORGANISATION_NAME,
     "ZHAW": ZHAW_ORGANISATION_NAME,
     "PHZH": PHZH_ORGANISATION_NAME,
     "ASVZ": ASVZ_ORGANISATION_NAME,
@@ -596,34 +592,35 @@ class AsvzEnroller:
 
         logging.info("Login to '{}'".format(self.creds[CREDENTIALS_ORG]))
         if self.creds[CREDENTIALS_ORG] == ASVZ_ORGANISATION_NAME:
-            self.__organisation_login_asvz(driver)
-        else:
+            # Open Switch_AAI/ASVZ-ID dropdown then click the button
             WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable(
                     (
                         By.XPATH,
-                        "//button[@class='btn btn-warning btn-block' and @title='SwitchAai Account Login']",
-                     )
+                        "//button[contains(@class,'btn-link') and contains(.,'Login mit Switch_AAI/ASVZ-ID')]",
+                    )
                 )
             ).click()
-
-
-            organization = driver.find_element(
-                By.XPATH, "//input[@id='userIdPSelection_iddtext']"
-            )
-            organization.send_keys("{}a".format(Keys.CONTROL))
-            organization.send_keys(self.creds[CREDENTIALS_ORG])
-            organization.send_keys(Keys.ENTER)
-
-            # UZH switched to Switch edu-ID login @see https://github.com/fbuetler/asvz-bot/issues/31
-            
-            if (
-                self.creds[CREDENTIALS_ORG] == SWITCH_EDUID_ORGANISATION_NAME
-                or self.creds[CREDENTIALS_ORG] == UZH_ORGANISATION_NAME
-            ):
-                self.__organisation_login_switch_eduid(driver)
-            else:
-                self.__organisation_login_default(driver)
+            WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//button[@class='btn btn-default' and normalize-space(text())='Switch_AAI/ASVZ-ID']",
+                    )
+                )
+            ).click()
+            self.__organisation_login_asvz(driver)
+        else:
+            # eduID button is directly accessible
+            WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//button[contains(@class,'btn-eduid')]",
+                    )
+                )
+            ).click()
+            self.__organisation_login_switch_eduid(driver)
 
         logging.info("Submitted login credentials")
         
@@ -633,7 +630,11 @@ class AsvzEnroller:
             #WebDriverWait(driver, 30).until(lambda d: d.current_url.startswith(LESSON_BASE_URL))
 
             # Hacky solution to update that sends us to memberships page after login
-            WebDriverWait(driver, 30, poll_frequency=1).until(lambda d: "memberships" in d.current_url)
+            WebDriverWait(driver, 30, poll_frequency=1).until(
+                lambda d: "memberships" in d.current_url
+                or self.lesson_url in d.current_url
+                or d.find_elements(By.ID, "btnRegister")
+            )
             logging.info("Valid login credentials")
         except:
             logging.warning(
@@ -677,15 +678,15 @@ class AsvzEnroller:
             EC.element_to_be_clickable(
                 (
                     By.XPATH,
-                    "//button[@type='submit' and @id='login-button']",
+                    "//button[@id='button-submit']",
                 )
             )
         ).click()
 
         try:
-            driver.find_element(By.XPATH, "//input[@id='password']").send_keys(
-                self.creds[CREDENTIALS_PW]
-            )
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.XPATH, "//input[@id='password']"))
+            ).send_keys(self.creds[CREDENTIALS_PW])
         except NoSuchElementException:
             logging.error(
                 "Failed to insert password. Please ensure that your username is an email address."
@@ -696,7 +697,7 @@ class AsvzEnroller:
             EC.element_to_be_clickable(
                 (
                     By.XPATH,
-                    "//button[@type='submit' and @id='login-button']",
+                    "//button[@id='button-proceed']",
                 )
             )
         ).click()
@@ -755,6 +756,10 @@ def parse_and_validate_start_time(start_time) -> datetime:
 
 
 def get_geckodriver_path(proxy_url=None):
+    system_geckodriver = shutil.which("geckodriver")
+    if system_geckodriver:
+        return system_geckodriver
+
     if proxy_url is not None:
         logging.info(f"Using proxy: {proxy_url}")
         http_client = CustomHttpClient(proxy=proxy_url)
