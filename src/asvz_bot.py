@@ -43,9 +43,11 @@ CREDENTIALS_PW = "password"
 ZHAW_ORGANISATION_NAME = "ZHAW - Zürcher Hochschule für Angewandte Wissenschaften"
 PHZH_ORGANISATION_NAME = "PH Zürich - Pädagogische Hochschule Zürich"
 ASVZ_ORGANISATION_NAME = "ASVZ"
+ETHZ_ORGANISATION_NAME = "ETH Zürich"
 SWITCH_EDUID_ORGANISATION_NAME = "SWITCH edu-ID"
 
 ORGANISATIONS = {
+    "ETHZ": ETHZ_ORGANISATION_NAME,
     "ZHAW": ZHAW_ORGANISATION_NAME,
     "PHZH": PHZH_ORGANISATION_NAME,
     "ASVZ": ASVZ_ORGANISATION_NAME,
@@ -591,7 +593,7 @@ class AsvzEnroller:
         ).click()
 
         logging.info("Login to '{}'".format(self.creds[CREDENTIALS_ORG]))
-        if self.creds[CREDENTIALS_ORG] == ASVZ_ORGANISATION_NAME:
+        if self.creds[CREDENTIALS_ORG] == ASVZ_ORGANISATION_NAME or self.creds[CREDENTIALS_ORG] == ETHZ_ORGANISATION_NAME:
             # Open Switch_AAI/ASVZ-ID dropdown then click the button
             WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable(
@@ -609,7 +611,25 @@ class AsvzEnroller:
                     )
                 )
             ).click()
-            self.__organisation_login_asvz(driver)
+            if self.creds[CREDENTIALS_ORG] == ETHZ_ORGANISATION_NAME:
+                # Open ETH login through switch
+                WebDriverWait(driver, 20).until(
+                    EC.element_to_be_clickable(
+                        (
+                            By.XPATH,
+                            "//button[@class='btn btn-warning btn-block' and contains(.,'SwitchAai')]",
+                        )
+                    )
+                ).click()
+                organization = driver.find_element(
+                By.XPATH, "//input[@id='userIdPSelection_iddtext']"
+                )
+                organization.send_keys("{}a".format(Keys.CONTROL))
+                organization.send_keys(self.creds[CREDENTIALS_ORG])
+                organization.send_keys(Keys.ENTER)
+                self.__organisation_login_default(driver)
+            else:
+                self.__organisation_login_asvz(driver)
         else:
             # eduID button is directly accessible
             WebDriverWait(driver, 20).until(
