@@ -25,6 +25,7 @@ This repo contains a script to automatically enroll to ASVZ lessons
     - ASVZ
     - SWITCH edu-ID (EDUID)
 - Save your credentials locally and reuse them on the next run
+- Optionally auto-generate and submit a 2FA (authenticator app) code on login
 - Note:
   ZHAW and PHZH use SWITCH edu-ID as login (*email* + password).
   ASVZ uses own login (*ASVZ-ID* + password).
@@ -71,6 +72,14 @@ Enroll by lesson ID and use saved credentials
 ```bash
 python3 asvz_bot.py lesson 196346
 ```
+
+Enroll with 2FA enabled on your SWITCH edu-ID account (if needed)
+
+```bash
+python3 asvz_bot.py --organisation "EDUID" --username "alex.taylor@example.org" --totp-secret "ABCD1234..." lesson 196346
+```
+
+The TOTP secret is the base32 code. It can also be set via the `ASVZ_TOTP_SECRET` env var, and is saved alongside your other credentials when using `--save-credentials`. If your account has no 2FA, just omit this flag.
 
 Enroll by lesson attributes and use saved credentials
 

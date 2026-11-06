@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+import pyotp
 import requests
 from requests import Response
 from requests.adapters import HTTPAdapter
@@ -39,6 +40,7 @@ CREDENTIALS_FILENAME = ".asvz-bot.json"
 CREDENTIALS_ORG = "organisation"
 CREDENTIALS_UNAME = "username"
 CREDENTIALS_PW = "password"
+CREDENTIALS_TOTP_SECRET = "totp_secret"
 
 ZHAW_ORGANISATION_NAME = "ZHAW - Zürcher Hochschule für Angewandte Wissenschaften"
 PHZH_ORGANISATION_NAME = "PH Zürich - Pädagogische Hochschule Zürich"
@@ -109,6 +111,7 @@ class EnvVariables:
     cred_organization: Optional[str] = os.environ.get("ASVZ_ORGANIZATION")
     cred_username: Optional[str] = os.environ.get("ASVZ_USERNAME")
     cred_password: Optional[str] = os.environ.get("ASVZ_PASSWORD")
+    cred_totp_secret: Optional[str] = os.environ.get("ASVZ_TOTP_SECRET")
     save_credentials: Optional[str] = os.environ.get("ASVZ_SAVE_CREDENTIALS")
     recurring_event: Optional[str] = os.environ.get("ASVZ_RECURRING_EVENT")
 
@@ -163,8 +166,8 @@ class CustomHttpClient(HttpClient):
 
 
 class CredentialsManager:
-    def __init__(self, org, uname, password, save_credentials):
-        
+    def __init__(self, org, uname, password, save_credentials, totp_secret=None):
+
         self.credential_file = Path(__file__).resolve().parent / CREDENTIALS_FILENAME
         self.credentials = self.__load()
         if self.credentials is None:
@@ -195,6 +198,10 @@ class CredentialsManager:
                 self.credentials[CREDENTIALS_PW] = password
         else:
             logging.info("Loaded credentials from local store")
+
+        # TOTP secret is optional and independent of the org/username override above.
+        if totp_secret:
+            self.credentials[CREDENTIALS_TOTP_SECRET] = totp_secret
 
         if save_credentials:
             logging.info("Storing credentials in local store")
@@ -367,10 +374,11 @@ class AsvzEnroller:
         self.proxy_url = proxy_url
 
         logging.info(
-            "Summary:\n\tOrganisation: {}\n\tUsername: {}\n\tPassword: {}\n\tLesson: {}".format(
+            "Summary:\n\tOrganisation: {}\n\tUsername: {}\n\tPassword: {}\n\t2FA: {}\n\tLesson: {}".format(
                 self.creds[CREDENTIALS_ORG],
                 self.creds[CREDENTIALS_UNAME],
                 "*" * len(self.creds[CREDENTIALS_PW]),
+                "enabled" if self.creds.get(CREDENTIALS_TOTP_SECRET) else "disabled",
                 self.lesson_url,
             )
         )
@@ -726,6 +734,44 @@ class AsvzEnroller:
             )
         ).click()
 
+        if self.creds.get(CREDENTIALS_TOTP_SECRET):
+            self.__submit_totp_code(driver)
+
+    def __submit_totp_code(self, driver):
+        totp_input_xpath = (
+            "//input[@id='otp' or @id='code' or @id='totp' "
+            "or @name='otp' or @name='code' or @name='totp' "
+            "or @autocomplete='one-time-code']"
+        )
+        try:
+            totp_input = WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.XPATH, totp_input_xpath))
+            )
+        except TimeoutException:
+            logging.debug(
+                "No 2FA code prompt appeared; assuming it wasn't required for this login"
+            )
+            return
+
+        logging.info("Entering TOTP code for two-factor authentication")
+        code = pyotp.TOTP(self.creds[CREDENTIALS_TOTP_SECRET]).now()
+        totp_input.send_keys(code)
+
+        submit_xpath = (
+            "//button[@id='button-proceed' or @id='button-submit' "
+            "or (@type='submit' and not(@disabled))]"
+        )
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, submit_xpath))
+            ).click()
+        except TimeoutException:
+            # Some UIs auto-submit once all digits of the code are entered.
+            logging.debug(
+                "No clickable submit button found after entering TOTP code; "
+                "assuming the form auto-submits"
+            )
+
     def __organisation_login_default(self, driver):
         submitbtn = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
@@ -826,6 +872,11 @@ def main():
         help="Organisation password",
     )
     parser.add_argument(
+        "--totp-secret",
+        type=str,
+        help="Base32 TOTP secret to auto-generate 2FA codes on login. Omit if your account has no 2FA.",
+    )
+    parser.add_argument(
         "-x", "--proxy", type=str, help="Proxy URL", required=False, default=None
     )
     parser.add_argument(
@@ -917,6 +968,9 @@ def main():
         password=EnvVariables.cred_password
         if EnvVariables.cred_password != ""
         else None,
+        totp_secret=EnvVariables.cred_totp_secret
+        if EnvVariables.cred_totp_secret != ""
+        else None,
         save_credentials=EnvVariables.save_credentials
         if EnvVariables.save_credentials is not None
         else True,
@@ -943,7 +997,11 @@ def main():
     creds = None
     try:
         creds = CredentialsManager(
-            args.organisation, args.username, args.password, args.save_credentials
+            args.organisation,
+            args.username,
+            args.password,
+            args.save_credentials,
+            args.totp_secret,
         ).get()
     except AsvzBotException as e:
         logging.error(e)
